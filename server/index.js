@@ -1,67 +1,29 @@
-require('dotenv').config(); //npm install dotenv --save so we can use env variables for passwords
-const express = require('express')
-const cors = require('cors');
-const mongoose =  require('mongoose')
-const app = express()
+import app from "./server.js"
+import mongodb from "mongodb"
+import dotenv from "dotenv" //npm install dotenv --save so we can use env variables for passwords
+import FilmsDAO from "./dao/filmsDAO.js" //import the Database Access Object
+dotenv.config(); 
 
-const MONGOOSE_PASSWORD = process.env.MONGOOSE_PASSWORD
-const FilmModel = require("./models/Films")
-app.use(express.json()) //This parses JSON coming from the frontend
-app.use(cors()); //Allows communication front end to back end
+const MongoClient = mongodb.MongoClient
+const port = process.env.PORT || 8000
 
-mongoose.connect(`mongodb+srv://mernuser:${MONGOOSE_PASSWORD}@cluster0.cxgnnso.mongodb.net/moviesked?retryWrites=true&w=majority`, 
-{
-    useNewURLParser: true,
-}
+//console.log(process.env.TIFF_DB_URI)
+
+MongoClient.connect(
+    process.env.TIFF_DB_URI,
+    {
+        maxPoolSize: 50,
+        writeConcern: {wtimeout:3000},
+        useNewURLParser: true
+    }
 )
-
-//Here is where we will retrieve items and display them for the frontend
-app.get('/read', async (req,res) => {
-    //FilmModel.find({ $where: {title: "Predator"}},)   //only return certain value/values
-    FilmModel.find({}, (err, result) => {
-       if (err) {
-        res.send(err)
-       } 
-       res.send(result) //if no error, send result
+.catch(err => {
+    console.error(err.stack)
+    process.exit(1)
+})//at this point we should be connected to the database
+.then(async client => {
+    await FilmsDAO.injectDB(client) //initial reference to films object in database
+    app.listen(port, () => {
+        console.log(`listening on port ${port}`)
     })
-})
-
-//Here is where we will add things to the database, reading from the frontend
-app.post('/insert', async (req,res) => {
-    const film = new FilmModel({
-        id: req.body.id,
-        title: req.body.title
-    })
-    try  {
-        await film.save()
-        res.send("inserted data")
-    } catch(err) {
-        console.log(err)
-    }
-})
-
-//Here is where we will update things already in the database
-app.put('/update', async (req,res) => {
-    const newFilmName = req.body.title
-    const id = req.body.id
-    //console.log("here ->", req.body.id)
-    try {
-        await FilmModel.updateOne({ "_id": id}, {
-            "title": newFilmName
-        })
-    } catch (err) {
-        console.log(err)
-    }
-})
-
-//Here is where we will delete items 
-app.delete('/delete/:id', async (req,res) => {
-    const id = req.params.id
-    await FilmModel.findByIdAndRemove(id).exec();
-    res.send("deleted")
-})
-
-//And now we listen....
-app.listen(3001, () => {
-    console.log("Server listening on port 3001...")
 })
